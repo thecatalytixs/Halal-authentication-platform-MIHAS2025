@@ -13,13 +13,11 @@ from io import StringIO
 # ========= Config =========
 RANDOM_STATE = 42
 
-# Prefer placing these two CSVs inside your repo under a "data" folder
-# data/mihas_training.csv
-# data/mihas_unknown.csv
+# Optional local demo files if you add them to your repo
 DEMO_RELATIVE = "data/mihas_training.csv"
 UNKNOWN_RELATIVE = "data/mihas_unknown.csv"
 
-# These were paths in your notebook environment. They usually do not exist on Streamlit Cloud.
+# Notebook style absolute paths will not exist on Streamlit Cloud
 DEMO_ABSOLUTE = "/mnt/data/All dataset percentage 40 porcine, 40 bovine, 40 fish gelatines - training dataset.csv"
 UNKNOWN_ABSOLUTE = "/mnt/data/All dataset percentage unknown gelatines - testing dataset.csv"
 
@@ -29,15 +27,15 @@ st.title("Halal Authentication Platform MIHAS2025")
 # ========= Sidebar =========
 with st.sidebar:
     st.header("Settings")
-    iqr_k = st.slider("Outlier cut off multiplier IQR", 1.0, 3.0, 1.5, 0.1)
+    iqr_k = st.slider("Outlier cutoff multiplier IQR", 1.0, 3.0, 1.5, 0.1)
     test_size = st.slider("Test size", 0.1, 0.4, 0.2, 0.05)
-    n_pls = st.slider("PLS DA components", 2, 5, 3, 1)
-    show_pls_labels = st.checkbox("Show SampleID on PLS DA points", value=False)
+    n_pls_req = st.slider("PLS-DA components", 2, 6, 3, 1)
+    show_pls_labels = st.checkbox("Show SampleID on PLS-DA points", value=False)
     use_demo = st.checkbox("Use built in MIHAS demo dataset", value=True)
 
-uploaded_file = st.file_uploader("Upload your dataset CSV", type=["csv"])
+uploaded_file = st.file_uploader("Upload your training dataset CSV", type=["csv"])
 
-# ========= Safe readers =========
+# ========= File helpers =========
 def _exists(path: str) -> bool:
     try:
         return bool(path) and os.path.exists(path)
@@ -45,7 +43,6 @@ def _exists(path: str) -> bool:
         return False
 
 def _tiny_training_demo() -> pd.DataFrame:
-    # very small valid amino acid table for first run
     csv = StringIO(
         "SampleID,Hyp,His,Ser,Arg,Gly,Asp,Glu,Thr,Ala,Pro,Lys,Tyr,Met,Val,Ile,Leu,Phe,Class\n"
         "P1,3776,0,1151,2255,11982,1267,2433,660,3629,4484,1445,180,300,884,388,907,560,Porcine\n"
@@ -65,7 +62,6 @@ def _load_training_demo() -> pd.DataFrame:
     return _tiny_training_demo()
 
 def _tiny_unknown_demo(feature_cols: list[str]) -> pd.DataFrame:
-    # creates one row with the same feature schema
     rng = np.random.RandomState(123)
     row = {"SampleID": "U1"}
     for c in feature_cols:
@@ -77,7 +73,6 @@ def _load_unknown_demo(feature_cols: list[str]) -> pd.DataFrame | None:
         return pd.read_csv(UNKNOWN_ABSOLUTE)
     if _exists(UNKNOWN_RELATIVE):
         return pd.read_csv(UNKNOWN_RELATIVE)
-    # If nothing exists, return a tiny synthetic example with correct columns
     return _tiny_unknown_demo(feature_cols)
 
 # ========= Cached loaders =========
@@ -162,6 +157,14 @@ def kmo_statistic(X_for_kmo: pd.DataFrame) -> float:
     denom = r2_sum + p2_sum
     return 0.0 if denom == 0.0 else r2_sum / denom
 
+def safe_pls_components(requested: int, X_train: pd.DataFrame, n_classes: int) -> int:
+    # PLS max components is limited by min(n_samples-1, n_features, n_targets)
+    n_samples = X_train.shape[0]
+    n_features = X_train.shape[1]
+    n_targets = n_classes
+    limit = max(1, min(n_samples - 1, n_features, n_targets))
+    return min(requested, limit)
+
 # ========= 2. Processing pipeline =========
 st.subheader("2. Processing pipeline")
 mask_keep = iqr_outlier_mask(X0, k=iqr_k)
@@ -183,7 +186,6 @@ X_test_z, _, _ = ddof1_standardise(X_test, mean_train, std_train)
 x_min, rng = fit_minmax_params_after_z(X_train_z)
 X_train_scaled = minmax_scale_1_100_from_params(X_train_z, x_min, rng)
 X_test_scaled = minmax_scale_1_100_from_params(X_test_z, x_min, rng)
-
 X_all_scaled = transform_full_pipeline(Xf, mean_train, std_train, x_min, rng)
 
 st.caption("Preview of processed training data after outlier removal, ddof 1 standardisation and 1 to 100 scaling")
@@ -204,10 +206,14 @@ st.metric(label="KMO statistic overall", value=f"{kmo_value:.3f}")
 if adequate:
     st.success("Dataset adequacy for halal authentication purpose is acceptable KMO equal or more than 0.5")
 else:
-    st.warning("Dataset adequacy for halal authentication purpose is NOT acceptable KMO less than 0.5. Consider collecting more samples removing noisy variables or improving measurement quality")
+    st.warning("Dataset adequacy for halal authentication purpose is not acceptable KMO less than 0.5. Consider collecting more samples removing noisy variables or improving measurement quality")
 
-# ========= 4. PLS DA =========
-st.subheader("4. PLS DA on processed data")
+# ========= 4. PLS-DA =========
+st.subheader("4. PLS-DA on processed data")
+n_pls = safe_pls_components(n_pls_req, X_train_scaled, n_classes=len(le.classes_))
+if n_pls != n_pls_req:
+    st.caption(f"Adjusted PLS components to {n_pls} based on data limits")
+
 Y_train_oh = np.eye(len(le.classes_))[y_train]
 pls = PLSRegression(n_components=n_pls)
 pls.fit(X_train_scaled, Y_train_oh)
@@ -225,7 +231,7 @@ fig_pls = px.scatter_3d(
     z=pls_cols[min(2, n_pls - 1)],
     color="Class",
     text="SampleID" if show_pls_labels else None,
-    title="PLS DA Scores",
+    title="PLS-DA Scores",
 )
 st.plotly_chart(fig_pls, use_container_width=True)
 
@@ -237,7 +243,7 @@ report_pls = classification_report(
     output_dict=True,
     zero_division=0,
 )
-st.markdown("**PLS DA test set report**")
+st.markdown("**PLS-DA test set report**")
 st.dataframe(pd.DataFrame(report_pls).transpose().round(3), use_container_width=True)
 
 cm_pls = confusion_matrix(
@@ -245,7 +251,7 @@ cm_pls = confusion_matrix(
     le.inverse_transform(y_pred_test),
     labels=le.classes_,
 )
-st.markdown("**PLS DA test set confusion matrix**")
+st.markdown("**PLS-DA test set confusion matrix**")
 st.dataframe(pd.DataFrame(cm_pls, index=le.classes_, columns=le.classes_))
 
 # ========= 5. VIP scores =========
@@ -263,12 +269,11 @@ fig_vip = px.bar(vip_df.head(20), x="Variable", y="VIP_Score", title="Top 20 VIP
 st.plotly_chart(fig_vip, use_container_width=True)
 st.download_button("Download VIP CSV", vip_df.to_csv(index=False).encode(), "vip_scores.csv", "text/csv")
 
-# ========= 6. Predict unknown dataset =========
+# ========= 6. Predict unknown dataset with trained PLS-DA =========
 st.subheader("6. Predict unknown dataset")
-st.caption("Upload a CSV with the same feature columns as the training data. Required columns: SampleID plus all amino acid features. The model reuses training standardisation and scaling parameters.")
+st.caption("Upload a CSV with the same feature columns as the training data. Required columns: SampleID plus amino acid features. The model reuses training standardisation and scaling parameters.")
 
 unknown_file = st.file_uploader("Upload unknown dataset CSV", type=["csv"], key="unknown_uploader")
-
 df_unknown_raw = load_unknown(unknown_file, feature_cols)
 
 if df_unknown_raw is None or df_unknown_raw.empty:
@@ -277,15 +282,86 @@ else:
     if "SampleID" not in df_unknown_raw.columns:
         st.error("The unknown dataset is missing the SampleID column.")
     else:
+        # Validate features
         missing_feats = [c for c in feature_cols if c not in df_unknown_raw.columns]
         extra_feats = [c for c in df_unknown_raw.columns if c not in feature_cols + ["SampleID", "Class"]]
 
         if missing_feats:
             st.error(f"The unknown dataset is missing required feature columns. Missing count {len(missing_feats)}. First few missing {missing_feats[:10]}")
         else:
-            Xu_raw = df_unknown_raw[feature_cols].copy()
+            # Coerce to numeric for safety
+            Xu_raw = df_unknown_raw[feature_cols].copy().apply(pd.to_numeric, errors="coerce")
+            if Xu_raw.isna().any().any():
+                st.warning("Found non numeric values in unknown dataset. They were coerced to NaN and will use training means for standardisation.")
+                # Impute with training means before z score
+                Xu_raw = Xu_raw.fillna(mean_train)
+
+            # Apply the same preprocessing learned from TRAIN
             std_safe = std_train.replace(0.0, 1.0)
             Xu_z = (Xu_raw - mean_train) / std_safe
             Xu_scaled = 1.0 + 99.0 * (Xu_z - x_min) / rng.replace(0.0, 1.0)
 
+            # Predict using trained PLS-DA
             Y_pred_u = pls.predict(Xu_scaled)
+            y_pred_idx = Y_pred_u.argmax(axis=1)
+            y_pred_labels = le.inverse_transform(y_pred_idx)
+
+            # Softmax style confidence
+            def softmax(a, axis=1):
+                a = np.asarray(a, dtype=float)
+                a = a - np.max(a, axis=axis, keepdims=True)
+                e = np.exp(a)
+                return e / np.sum(e, axis=axis, keepdims=True)
+
+            probs = softmax(Y_pred_u, axis=1)
+            conf = probs.max(axis=1)
+
+            results = pd.DataFrame({
+                "SampleID": df_unknown_raw["SampleID"].values,
+                "Predicted_Class": y_pred_labels,
+                "Confidence": np.round(conf, 4),
+            })
+
+            class_names = list(le.classes_)
+            score_cols = {f"Score_{cls}": Y_pred_u[:, i] for i, cls in enumerate(class_names)}
+            prob_cols = {f"Prob_{cls}": probs[:, i] for i, cls in enumerate(class_names)}
+            results = pd.concat([results, pd.DataFrame(score_cols), pd.DataFrame(prob_cols)], axis=1)
+
+            st.markdown("**Prediction results on unknown dataset**")
+            st.dataframe(results, use_container_width=True)
+
+            st.markdown("**Predicted class distribution**")
+            pred_counts = results["Predicted_Class"].value_counts().rename_axis("Class").to_frame("Count")
+            st.dataframe(pred_counts)
+
+            st.download_button(
+                "Download predictions as CSV",
+                results.to_csv(index=False).encode(),
+                "unknown_predictions_plsda.csv",
+                "text/csv"
+            )
+
+            # Overlay unknown samples on the existing PLS-DA 3D plot
+            try:
+                Xu_scores = pls.transform(Xu_scaled)
+                pls_df_u = pd.DataFrame(Xu_scores, columns=pls_cols)
+                pls_df_u["SampleID"] = df_unknown_raw["SampleID"].values
+                pls_df_u["Class"] = "Unknown"
+
+                fig_overlay = px.scatter_3d(
+                    pd.concat([pls_df, pls_df_u], ignore_index=True),
+                    x=pls_cols[0], y=pls_cols[1], z=pls_cols[min(2, n_pls - 1)],
+                    color="Class",
+                    symbol="Class",
+                    title="PLS-DA Scores with Unknown Overlay"
+                )
+                if not show_pls_labels:
+                    fig_overlay.update_traces(selector=dict(name="Unknown"), marker=dict(size=6))
+                else:
+                    fig_overlay.update_traces(text=None)
+                st.plotly_chart(fig_overlay, use_container_width=True)
+            except Exception as e:
+                st.caption(f"Overlay plot skipped due to {e}")
+
+            if extra_feats:
+                st.caption(f"Note the unknown dataset contains {len(extra_feats)} extra columns that were ignored. Example {extra_feats[:8]}")

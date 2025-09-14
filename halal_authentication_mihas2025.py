@@ -8,33 +8,37 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.metrics import classification_report, confusion_matrix
 import plotly.express as px
 
+# ========== Config ==========
 RANDOM_STATE = 42
 DEMO_PATH = "/mnt/data/All dataset percentage 40 porcine, 40 bovine, 40 fish gelatines - training dataset.csv"
+UNKNOWN_DEMO_PATH = "/mnt/data/All dataset percentage unknown gelatines - testing dataset.csv"
 
 st.set_page_config(page_title="Halal Authentication Platform MIHAS2025", layout="wide")
 st.title("Halal Authentication Platform MIHAS2025")
 
-# ================= Sidebar =================
+# ========== Sidebar ==========
 with st.sidebar:
     st.header("Settings")
     iqr_k = st.slider("Outlier cut off multiplier IQR", 1.0, 3.0, 1.5, 0.1)
     test_size = st.slider("Test size", 0.1, 0.4, 0.2, 0.05)
     n_pls = st.slider("PLS DA components", 2, 5, 3, 1)
     show_pls_labels = st.checkbox("Show SampleID on PLS DA points", value=False)
+    use_demo = st.checkbox("Use built in MIHAS demo dataset", value=True)
 
 uploaded_file = st.file_uploader("Upload your dataset CSV", type=["csv"])
 
+# ========== Load data ==========
 @st.cache_data
-def load_data(file):
-    if file is not None:
+def load_data(file, use_demo_flag):
+    if file is not None and not use_demo_flag:
         return pd.read_csv(file)
     return pd.read_csv(DEMO_PATH)
 
-df_raw = load_data(uploaded_file)
+df_raw = load_data(uploaded_file, use_demo)
 
 # Basic checks
 required = {"SampleID", "Class"}
-if not required.ossubset(df_raw.columns) if hasattr(required, "ossubset") else not required.issubset(df_raw.columns):
+if not required.issubset(df_raw.columns):
     st.error(f"Missing required columns {required}. Found {set(df_raw.columns)}")
     st.stop()
 
@@ -42,7 +46,7 @@ feature_cols = [c for c in df_raw.columns if c not in ["SampleID", "Class"]]
 X0 = df_raw[feature_cols].copy()
 y_series = df_raw["Class"].copy()
 
-# ============ 1. Dataset preview ============
+# ========== 1. Dataset preview ==========
 st.subheader("1. Dataset preview and class balance")
 c1, c2 = st.columns([2, 1])
 with c1:
@@ -51,9 +55,9 @@ with c2:
     st.write("Class counts")
     st.dataframe(y_series.value_counts().rename_axis("Class").to_frame("Count"))
 
-# ============ Helpers ============
+# ========== Helpers ==========
 def iqr_outlier_mask(X: pd.DataFrame, k: float = 1.5) -> pd.Series:
-    """True means keep row. Row kept only if all features lie within IQR fences."""
+    """True means keep row. Row is kept only if all features lie within IQR fences."""
     Q1 = X.quantile(0.25)
     Q3 = X.quantile(0.75)
     IQR = Q3 - Q1
@@ -106,7 +110,7 @@ def kmo_statistic(X_for_kmo: pd.DataFrame) -> float:
     denom = r2_sum + p2_sum
     return 0.0 if denom == 0.0 else r2_sum / denom
 
-# ============ 2. Processing pipeline ============
+# ========== 2. Processing pipeline ==========
 st.subheader("2. Processing pipeline")
 # 2.1 Outlier removal
 mask_keep = iqr_outlier_mask(X0, k=iqr_k)
@@ -123,16 +127,16 @@ X_train, X_test, y_train, y_test = train_test_split(
     Xf, y_enc, test_size=test_size, stratify=y_enc, random_state=RANDOM_STATE
 )
 
-# 2.3 Standardise with ddof 1 on TRAIN only
+# 2.3 Standardise with ddof 1 fit on TRAIN only
 X_train_z, mean_train, std_train = ddof1_standardise(X_train)
 X_test_z, _, _ = ddof1_standardise(X_test, mean_train, std_train)
 
-# 2.4 Scale to 1 100 using TRAIN parameters after standardisation
+# 2.4 Scale to 1–100 using TRAIN parameters after standardisation
 x_min, rng = fit_minmax_params_after_z(X_train_z)
 X_train_scaled = minmax_scale_1_100_from_params(X_train_z, x_min, rng)
 X_test_scaled = minmax_scale_1_100_from_params(X_test_z, x_min, rng)
 
-# For visualising all filtered rows later
+# For later visualisation of all filtered rows
 X_all_scaled = transform_full_pipeline(Xf, mean_train, std_train, x_min, rng)
 
 st.caption("Preview of processed training data after outlier removal, ddof 1 standardisation and 1 to 100 scaling")
@@ -145,7 +149,7 @@ df_processed_preview = pd.concat(
 )
 st.dataframe(df_processed_preview.head(), use_container_width=True)
 
-# ============ 3. KMO test ============
+# ========== 3. KMO test ==========
 st.subheader("3. Kaiser Meyer Olkin KMO test")
 kmo_value = kmo_statistic(pd.DataFrame(X_train_z, columns=feature_cols))
 adequate = kmo_value >= 0.5
@@ -155,7 +159,7 @@ if adequate:
 else:
     st.warning("Dataset adequacy for halal authentication purpose is NOT acceptable KMO less than 0.5. Consider collecting more samples removing noisy variables or improving measurement quality")
 
-# ============ 4. PLS DA ============
+# ========== 4. PLS DA ==========
 st.subheader("4. PLS DA on processed data")
 Y_train_oh = np.eye(len(le.classes_))[y_train]
 pls = PLSRegression(n_components=n_pls)
@@ -199,7 +203,7 @@ cm_pls = confusion_matrix(
 st.markdown("**PLS DA test set confusion matrix**")
 st.dataframe(pd.DataFrame(cm_pls, index=le.classes_, columns=le.classes_))
 
-# ============ 5. VIP scores ============
+# ========== 5. VIP scores ==========
 st.subheader("5. VIP scores")
 T = pls.x_scores_
 W = pls.x_weights_
@@ -213,3 +217,82 @@ st.dataframe(vip_df, use_container_width=True)
 fig_vip = px.bar(vip_df.head(20), x="Variable", y="VIP_Score", title="Top 20 VIP")
 st.plotly_chart(fig_vip, use_container_width=True)
 st.download_button("Download VIP CSV", vip_df.to_csv(index=False).encode(), "vip_scores.csv", "text/csv")
+
+# ========== 6. Predict unknown dataset with trained PLS DA ==========
+st.subheader("6. Predict unknown dataset")
+st.caption("Upload a CSV with the same feature columns as the training data. Required columns: SampleID plus all amino acid features. The model will reuse training standardisation and scaling parameters.")
+
+unknown_file = st.file_uploader("Upload unknown dataset CSV", type=["csv"], key="unknown_uploader")
+
+@st.cache_data
+def load_unknown(file):
+    if file is not None:
+        return pd.read_csv(file)
+    try:
+        return pd.read_csv(UNKNOWN_DEMO_PATH)
+    except Exception:
+        return None
+
+df_unknown_raw = load_unknown(unknown_file)
+
+if df_unknown_raw is None:
+    st.info("No unknown dataset provided yet. Upload a CSV to generate predictions.")
+else:
+    if "SampleID" not in df_unknown_raw.columns:
+        st.error("The unknown dataset is missing the SampleID column.")
+    else:
+        missing_feats = [c for c in feature_cols if c not in df_unknown_raw.columns]
+        extra_feats = [c for c in df_unknown_raw.columns if c not in feature_cols + ["SampleID", "Class"]]
+
+        if missing_feats:
+            st.error(f"The unknown dataset is missing required feature columns. Missing count {len(missing_feats)}. First few missing {missing_feats[:10]}")
+        else:
+            Xu_raw = df_unknown_raw[feature_cols].copy()
+
+            # Apply the same preprocessing learned from TRAIN
+            std_safe = std_train.replace(0.0, 1.0)
+            Xu_z = (Xu_raw - mean_train) / std_safe
+            Xu_scaled = 1.0 + 99.0 * (Xu_z - x_min) / rng.replace(0.0, 1.0)
+
+            # Predict using trained PLS DA
+            Y_pred_u = pls.predict(Xu_scaled)
+            y_pred_idx = Y_pred_u.argmax(axis=1)
+            y_pred_labels = le.inverse_transform(y_pred_idx)
+
+            # Softmax style confidence from raw PLS outputs
+            def softmax(a, axis=1):
+                a = np.asarray(a, dtype=float)
+                a = a - np.max(a, axis=axis, keepdims=True)
+                e = np.exp(a)
+                return e / np.sum(e, axis=axis, keepdims=True)
+
+            probs = softmax(Y_pred_u, axis=1)
+            conf = probs.max(axis=1)
+
+            results = pd.DataFrame({
+                "SampleID": df_unknown_raw["SampleID"].values,
+                "Predicted_Class": y_pred_labels,
+                "Confidence": np.round(conf, 4),
+            })
+
+            class_names = list(le.classes_)
+            score_cols = {f"Score_{cls}": Y_pred_u[:, i] for i, cls in enumerate(class_names)}
+            prob_cols = {f"Prob_{cls}": probs[:, i] for i, cls in enumerate(class_names)}
+            results = pd.concat([results, pd.DataFrame(score_cols), pd.DataFrame(prob_cols)], axis=1)
+
+            st.markdown("**Prediction results on unknown dataset**")
+            st.dataframe(results, use_container_width=True)
+
+            st.markdown("**Predicted class distribution**")
+            pred_counts = results["Predicted_Class"].value_counts().rename_axis("Class").to_frame("Count")
+            st.dataframe(pred_counts)
+
+            st.download_button(
+                "Download predictions as CSV",
+                results.to_csv(index=False).encode(),
+                "unknown_predictions_plsda.csv",
+                "text/csv"
+            )
+
+            if extra_feats:
+                st.caption(f"Note the unknown dataset contains {len(extra_feats)} extra columns that were ignored. Example {extra_feats[:8]}")

@@ -16,7 +16,7 @@ import io
 plt.style.use('default')
 
 st.set_page_config(page_title="Halal Authentication Platform MIHAS2025", layout="wide")
-st.title("Halal Authentication Platform")
+st.title("Halal Authentication Platform MIHAS2025")
 
 # File uploader
 uploaded_file = st.file_uploader("Upload your FTIR dataset (CSV format only)", type=["csv"])

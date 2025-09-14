@@ -98,12 +98,10 @@ y_series = df_raw["Class"].copy()
 
 # ========= 1. Dataset preview =========
 st.subheader("1. Dataset preview and class balance")
-c1, c2 = st.columns([2, 1])
-with c1:
-    st.dataframe(df_raw.head(), use_container_width=True)
-with c2:
-    st.write("Class counts")
-    st.dataframe(y_series.value_counts().rename_axis("Class").to_frame("Count"))
+st.markdown("**Sample preview**")
+st.dataframe(df_raw.head(), use_container_width=True)
+st.markdown("**Class counts**")
+st.dataframe(y_series.value_counts().rename_axis("Class").to_frame("Count"), use_container_width=True)
 
 # ========= Helpers =========
 def iqr_outlier_mask(X: pd.DataFrame, k: float = 1.5) -> pd.Series:

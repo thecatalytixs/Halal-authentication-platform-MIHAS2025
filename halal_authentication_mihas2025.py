@@ -267,6 +267,14 @@ fig_vip = px.bar(vip_df.head(20), x="Variable", y="VIP_Score", title="Top 20 VIP
 st.plotly_chart(fig_vip, use_container_width=True)
 st.download_button("Download VIP CSV", vip_df.to_csv(index=False).encode(), "vip_scores.csv", "text/csv")
 
+# VIP explanation note
+st.markdown(
+    """
+    **Note** VIP equals Variable Importance in the Projection  
+    Variables with VIP scores greater than 0.8 or 1.0 are generally considered to contribute significantly to the predictive quality of distinguishing between halal and non halal sources
+    """
+)
+
 # ========= 6. Predict unknown dataset =========
 st.subheader("6. Predict unknown dataset")
 st.caption("Upload a CSV with the same feature columns as the training data. Required columns are SampleID plus amino acid features. The model reuses training standardisation and scaling parameters.")

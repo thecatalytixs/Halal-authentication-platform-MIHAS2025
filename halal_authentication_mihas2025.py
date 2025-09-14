@@ -192,9 +192,9 @@ kmo_value = kmo_statistic(pd.DataFrame(X_train_z, columns=feature_cols))
 adequate = kmo_value >= 0.5
 st.metric(label="KMO statistic overall", value=f"{kmo_value:.3f}")
 if adequate:
-    st.success("Dataset adequacy is acceptable KMO equal or more than 0.5")
+    st.success("Dataset adequacy is acceptable since KMO equal or more than 0.5")
 else:
-    st.warning("Dataset adequacy is not acceptable KMO less than 0.5")
+    st.warning("Dataset adequacy is not acceptable since KMO is less than 0.5")
 
 # ========= 4. PLS DA =========
 st.subheader("4. PLS DA on processed data")
@@ -216,7 +216,7 @@ fig_pls = px.scatter_3d(
 st.plotly_chart(fig_pls, use_container_width=True)
 
 # ========= 4b. Leave one out evaluation =========
-st.subheader("4b. PLS DA leave one out evaluation")
+st.subheader("PLS DA leave one out evaluation")
 n_samples = Xf.shape[0]
 classes = list(le.classes_)
 y_true_all, y_pred_all = [], []
@@ -270,8 +270,7 @@ st.download_button("Download VIP CSV", vip_df.to_csv(index=False).encode(), "vip
 # VIP explanation note
 st.markdown(
     """
-    **Note** VIP equals Variable Importance in the Projection  
-    Variables with VIP scores greater than 0.8 or 1.0 are generally considered to contribute significantly to the predictive quality of distinguishing between halal and non halal sources
+    **Note** VIP equals Variable Importance in the Projection. Variables with VIP scores greater than 0.8 or 1.0 are generally considered to contribute significantly to the predictive quality of distinguishing between halal and non halal sources
     """
 )
 

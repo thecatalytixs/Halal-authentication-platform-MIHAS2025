@@ -15,7 +15,7 @@ import io
 # Force matplotlib to use light theme
 plt.style.use('default')
 
-st.set_page_config(page_title="Halal Authentication Platform", layout="wide")
+st.set_page_config(page_title="Halal Authentication Platform MIHAS2025", layout="wide")
 st.title("Halal Authentication Platform")
 
 # File uploader
@@ -156,3 +156,4 @@ st.dataframe(report_df_test, use_container_width=True)
 conf_matrix_test = confusion_matrix(y_test, y_pred_test)
 st.markdown("**Confusion Matrix (Test Set):**")
 st.dataframe(pd.DataFrame(conf_matrix_test, index=label_encoder.classes_, columns=label_encoder.classes_))
+

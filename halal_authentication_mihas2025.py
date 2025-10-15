@@ -17,8 +17,8 @@ UNKNOWN_RELATIVE = "data/mihas_unknown.csv"
 DEMO_ABSOLUTE = "/mnt/data/All dataset percentage 40 porcine, 40 bovine, 40 fish gelatines - training dataset.csv"
 UNKNOWN_ABSOLUTE = "/mnt/data/All dataset percentage unknown gelatines - testing dataset.csv"
 
-st.set_page_config(page_title="Halal Authentication Platform MIHAS2025", layout="wide")
-st.title("Halal Authentication Platform MIHAS2025")
+st.set_page_config(page_title="Halal Authentication Platform MIHF2025", layout="wide")
+st.title("Halal Authentication Platform MIHF2025")
 
 # ========= Sidebar =========
 with st.sidebar:
@@ -97,8 +97,8 @@ X0 = df_raw[feature_cols].copy()
 y_series = df_raw["Class"].copy()
 
 # ========= 1. Dataset preview =========
-st.subheader("1. Dataset preview and class balance")
-st.markdown("**Sample preview**")
+st.subheader("1. Dataset preview")
+st.markdown("**Sample and variable preview**")
 st.dataframe(df_raw.head(), use_container_width=True)
 st.markdown("**Class counts**")
 st.dataframe(y_series.value_counts().rename_axis("Class").to_frame("Count"), use_container_width=True)
@@ -187,17 +187,17 @@ df_processed_preview = pd.concat(
 st.dataframe(df_processed_preview.head(), use_container_width=True)
 
 # ========= 3. KMO test =========
-st.subheader("3. Kaiser Meyer Olkin KMO test")
+st.subheader("3. Correlation adequacy")
 kmo_value = kmo_statistic(pd.DataFrame(X_train_z, columns=feature_cols))
 adequate = kmo_value >= 0.5
-st.metric(label="KMO statistic overall", value=f"{kmo_value:.3f}")
+st.metric(label="Overall correlation adequacy", value=f"{kmo_value:.3f}")
 if adequate:
-    st.success("Dataset adequacy is acceptable since KMO equal or more than 0.5")
+    st.success("Dataset adequacy is acceptable since overall correlation adequacy equal or more than 0.5")
 else:
-    st.warning("Dataset adequacy is not acceptable since KMO is less than 0.5")
+    st.warning("Dataset adequacy is not acceptable since overall correlation adequacy is less than 0.5")
 
 # ========= 4. PLS DA =========
-st.subheader("4. PLS DA on processed data")
+st.subheader("4. Classes for samples")
 n_pls = safe_pls_components(n_pls_req, X_train, n_classes=len(le.classes_))
 pls = PLSRegression(n_components=n_pls)
 pls.fit(X_all_scaled, np.eye(len(le.classes_))[y_enc])
@@ -211,12 +211,12 @@ pls_df["SampleID"] = df_filtered["SampleID"].values
 fig_pls = px.scatter_3d(
     pls_df, x=pls_cols[0], y=pls_cols[1], z=pls_cols[min(2, n_pls - 1)],
     color="Class", text="SampleID" if show_pls_labels else None,
-    title="PLS DA Scores"
+    title="Classes for samples"
 )
 st.plotly_chart(fig_pls, use_container_width=True)
 
 # ========= 4b. Leave one out evaluation =========
-st.subheader("PLS DA leave one out evaluation")
+st.subheader("Evaluation of sample classes")
 n_samples = Xf.shape[0]
 classes = list(le.classes_)
 y_true_all, y_pred_all = [], []
@@ -254,7 +254,7 @@ st.metric("Total correct classifications", f"{int(np.trace(cm_loo))} of {n_sampl
 st.caption(f"Overall accuracy {np.trace(cm_loo)/n_samples:.3%}")
 
 # ========= 5. VIP scores =========
-st.subheader("5. VIP scores")
+st.subheader("5. Significant variables")
 T = pls.x_scores_
 W = pls.x_weights_
 Q = pls.y_loadings_
@@ -270,7 +270,7 @@ st.download_button("Download VIP CSV", vip_df.to_csv(index=False).encode(), "vip
 # VIP explanation note
 st.markdown(
     """
-    **Note** VIP equals Variable Importance in the Projection. Variables with VIP scores greater than 0.8 or 1.0 are generally considered to contribute significantly to the predictive quality of distinguishing between halal and non halal sources
+    **Note** Variables with significant variables scores greater than 0.8 or 1.0 are generally considered to contribute significantly to the predictive quality of distinguishing between halal and non halal sources
     """
 )
 

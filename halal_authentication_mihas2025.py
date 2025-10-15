@@ -261,11 +261,11 @@ Q = pls.y_loadings_
 p, h = W.shape
 SStotal = np.sum(T**2, axis=0) * np.sum(Q**2, axis=0)
 vip = np.sqrt(p * np.sum((W**2) * SStotal.reshape(1, -1), axis=1) / np.sum(SStotal))
-vip_df = pd.DataFrame({"Variable": feature_cols, "VIP_Score": vip}).sort_values("VIP_Score", ascending=False)
+vip_df = pd.DataFrame({"Variable": feature_cols, "Significant_variables_score": vip}).sort_values("Significant_variables_score", ascending=False)
 st.dataframe(vip_df, use_container_width=True)
-fig_vip = px.bar(vip_df.head(20), x="Variable", y="VIP_Score", title="Top 20 VIP")
+fig_vip = px.bar(vip_df.head(20), x="Variable", y="Significant_variables_score", title="Top 20 significant variables score")
 st.plotly_chart(fig_vip, use_container_width=True)
-st.download_button("Download VIP CSV", vip_df.to_csv(index=False).encode(), "vip_scores.csv", "text/csv")
+st.download_button("Download significant variables CSV", vip_df.to_csv(index=False).encode(), "Significant_variables_score.csv", "text/csv")
 
 # VIP explanation note
 st.markdown(
@@ -275,7 +275,7 @@ st.markdown(
 )
 
 # ========= 6. Predict unknown dataset =========
-st.subheader("6. Predict unknown dataset")
+st.subheader("6. Prediction of client samples")
 st.caption("Upload a CSV with the same feature columns as the training data. Required columns are SampleID plus amino acid features. The model reuses training standardisation and scaling parameters.")
 unknown_file = st.file_uploader("Upload unknown dataset CSV", type=["csv"], key="unknown_uploader")
 df_unknown_raw = load_unknown(unknown_file, feature_cols)
@@ -325,7 +325,7 @@ else:
             prob_cols = {f"Prob_{cls}": probs[:, i] for i, cls in enumerate(class_names)}
             results = pd.concat([results, pd.DataFrame(score_cols), pd.DataFrame(prob_cols)], axis=1)
 
-            st.markdown("**Prediction results on unknown dataset**")
+            st.markdown("**Prediction results on client samples**")
             st.dataframe(results, use_container_width=True)
 
             st.markdown("**Predicted class distribution**")
@@ -351,7 +351,7 @@ else:
                     x=pls_cols[0], y=pls_cols[1], z=pls_cols[min(2, n_pls - 1)],
                     color="Class",
                     symbol="Class",
-                    title="PLS DA Scores with Unknown Overlay"
+                    title="Prediction results on client samples"
                 )
                 st.plotly_chart(fig_overlay, use_container_width=True)
             except Exception as e:

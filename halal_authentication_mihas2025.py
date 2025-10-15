@@ -328,7 +328,7 @@ else:
             st.markdown("**Prediction results on client samples**")
             st.dataframe(results, use_container_width=True)
 
-            st.markdown("**Predicted class distribution**")
+            st.markdown("**Predicted class distribution of client samples**")
             pred_counts = results["Predicted_Class"].value_counts().rename_axis("Class").to_frame("Count")
             st.dataframe(pred_counts)
 

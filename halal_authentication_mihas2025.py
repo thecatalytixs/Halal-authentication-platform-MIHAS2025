@@ -17,8 +17,8 @@ UNKNOWN_RELATIVE = "data/mihas_unknown.csv"
 DEMO_ABSOLUTE = "/mnt/data/All dataset percentage 40 porcine, 40 bovine, 40 fish gelatines - training dataset.csv"
 UNKNOWN_ABSOLUTE = "/mnt/data/All dataset percentage unknown gelatines - testing dataset.csv"
 
-st.set_page_config(page_title="Halal Authentication Platform MIHF2025", layout="wide")
-st.title("Halal Authentication Platform MIHF2025")
+st.set_page_config(page_title="Halal Authentication Platform", layout="wide")
+st.title("Halal Authentication Platform")
 
 # ========= Sidebar =========
 with st.sidebar:
